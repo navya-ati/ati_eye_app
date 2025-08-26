@@ -1,0 +1,14 @@
+{
+    "inference_window": 1,
+    "min_apply_score": 1,
+    "request_time": 1,
+    "release_window": 30,
+    "release_attempts": 5,
+    "zone_name": "ati_eye_demo",
+    "zone_id": "7",
+    "visa_type": "unparking",
+    "camera_fps": 5,
+    "camera_h_fov": 62.2,
+    "camera_v_fov": 48.8,
+    "camera_resolution": [1920,1080]
+}
