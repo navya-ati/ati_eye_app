@@ -31,16 +31,6 @@ def exit_handler(sig, frame):
 signal.signal(signal.SIGINT, exit_handler)
 signal.signal(signal.SIGTERM, exit_handler)
 
-# Storage setup
-base_path = "/mnt/ssd/videos"
-os.makedirs(base_path, exist_ok=True)
-
-now = datetime.now()
-formatted_date = os.path.join(base_path, "data_collection_" + now.strftime("%Y_%m_%d_%H_%M_%S"))
-os.makedirs(formatted_date, exist_ok=True)
-
-print("[INFO] Videos will be saved in:", formatted_date)
-
 # Camera setup
 picam2 = Picamera2()
 picam2.preview_configuration.main.size = camera_resolution
