@@ -3,106 +3,79 @@ import logging
 import json
 import time
 import cv2
-from matplotlib import pyplot as plt
 import numpy as np
 
-# -------------------------------
-# Load config
-# -------------------------------
+# Load the configuration from eye_config.json file
 def load_config():
-    with open('eye_config.json') as user_file:
-        config = json.load(user_file)
+    with open('eye_config.json') as f:
+        config = json.load(f)
     return config
 
-# -------------------------------
-# Get current time string
-# -------------------------------
+# Get current time as a string in format YYYY-MM-DD-HH-MM-SS
 def get_time_str():
     return time.strftime("%Y-%m-%d-%H-%M-%S")
 
-# -------------------------------
-# Logger setup
-# -------------------------------
+# Setup a logger that writes logs to a file
 def setup_logger(log_file, level=logging.INFO):
     logger = logging.getLogger(__name__)
     logger.setLevel(level)
+
+    # Create file handler to save logs
     fh = logging.FileHandler(log_file)
     fh.setLevel(level)
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+
+    # Define log format (time, name, level, message)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     fh.setFormatter(formatter)
+
+    # Attach file handler to logger
     logger.addHandler(fh)
     return logger
 
+# Create a logger and directory for logs
 def create_logger(app_version=""):
     start_time_str = get_time_str()
+
+    # Create directory with timestamp name inside /home/ati/out
     log_dir = os.path.join("/home/ati/out", start_time_str)
     os.makedirs(log_dir, exist_ok=True)
-    print(f"created dir {log_dir}")
+    print(f"[LOGGER] Created dir {log_dir}")
+
+    # Path of log file
     log_file_path = os.path.join(log_dir, "ati_eye.log")
+
+    # Setup logger
     logger = setup_logger(log_file_path)
-    logger.info(f"initializing ati_eye application - v{app_version}!")
+
+    # First log entry
+    logger.info(f"Initializing ati_eye application - v{app_version}!")
     return logger, log_dir
 
-# -------------------------------
-# Tensor conversion
-# -------------------------------
+# Convert tensor values (from YOLO output) to int or float
 def tensor_to_int_float(tens, to_type="int"):
     response = []
     if to_type == "int":
-        for i in tens:
-            response.append(int(i))
+        response = [int(i) for i in tens]
     elif to_type == "float":
-        for i in tens:
-            response.append(float(i))
+        response = [float(i) for i in tens]
     return response
 
-# -------------------------------
-# YOLO result processing
-# -------------------------------
+# Process YOLO model results: extract classes, bounding boxes, and scores
 def process_yolo_result(result):
-    classes = []
-    xyxy = []
-    scores = []
+    classes, xyxy, scores = [], [], []
     for r in result:
+        # Extract class, coordinates (x1,y1,x2,y2), and confidence score
         for clas, xy, score in zip(r.boxes.cls, r.boxes.xyxy, r.boxes.conf):
             classes.append(clas)
-            xy_int = tensor_to_int_float(xy, "int")
-            xyxy.append(xy_int)
-            scores.append(score)
-    scores = tensor_to_int_float(scores, "float")
+            xyxy.append(tensor_to_int_float(xy, "int"))
+            scores.append(float(score))
+
+    # Convert class numbers to integers
     classes = tensor_to_int_float(classes, "int")
     return classes, xyxy, scores
 
-# -------------------------------
-# Image display
-# -------------------------------
-def im_show(image):
-    plt.figure()
-    img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    plt.imshow(img_rgb)
-    plt.show()
-
-# -------------------------------
-# Camera capture settings
-# -------------------------------
-def apply_camera_settings(cap, config):
-    resolution = config.get("camera_resolution", [640, 480])
-    fps = config.get("camera_fps", 30)
-
-    frame_width, frame_height = resolution
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_height)
-    cap.set(cv2.CAP_PROP_FPS, fps)
-
-    print(f"[CAMERA CONFIG] Set resolution: {frame_width}x{frame_height} at {fps} FPS")
-
-# -------------------------------
-# Get camera FOV
-# -------------------------------
+# Get camera field of view from config file
 def get_camera_fov(config):
     h_fov = config.get("camera_h_fov", None)
     v_fov = config.get("camera_v_fov", None)
     return h_fov, v_fov
-
