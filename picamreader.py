@@ -1,31 +1,35 @@
 import cv2
 import time
-import json
 from picamera2 import Picamera2
 from threading import Thread, Event
 import os
+import json
 
-# Load configuration
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "eye_config.json")
-with open(CONFIG_PATH, "r") as f:
+# Load configuration from eye_config.json
+with open("eye_config.json") as f:
     config = json.load(f)
 
 # Camera settings from config
-CAMERA_RESOLUTION = tuple(config.get("camera_resolution", [640, 480]))
+CAMERA_RESOLUTION = tuple(config.get("camera_resolution", [1920, 1080]))
 CAMERA_FPS = config.get("camera_fps", 10)
 
-
 class PiCamReader(Thread):
-    def __init__(self, input_size=CAMERA_RESOLUTION, output_size=None, color_format="RGB888"):
-        Thread.__init__(self)
+    def __init__(self, input_size=CAMERA_RESOLUTION, color_format="RGB888", save_dir=None):
+        Thread.__init__(self)  # Initialize thread
         self._stop_event = Event()
-        self.frame = 0
+        self.frame = 0  # Frame counter
+        self.keep_running = True
+        self.latest_frame = None  # Stores latest captured frame
+        self.is_new_data = False  # Flag to check if new data is available
 
-        # Camera FOV
+        # Directory to save frames (if provided)
+        self.save_dir = save_dir
+        if self.save_dir:
+            os.makedirs(self.save_dir, exist_ok=True)
+
+        # Camera Field of View (FOV) from config
         self.h_fov = config.get("camera_h_fov", 62.2)
         self.v_fov = config.get("camera_v_fov", 48.8)
-        self.h_angle_per_pixel = self.h_fov / CAMERA_RESOLUTION[0]
-        self.v_angle_per_pixel = self.v_fov / CAMERA_RESOLUTION[1]
 
         # Initialize PiCamera2
         self.picam2 = Picamera2()
@@ -35,39 +39,40 @@ class PiCamReader(Thread):
         self.picam2.configure("preview")
         self.picam2.start()
 
-        self.output_size = output_size if output_size else input_size
-        self.cam_data = None
-        self.keep_running = True
-        self.is_new_data = False
-
     def run(self):
-        print(f"Starting PiCamReader {CAMERA_RESOLUTION} @ {CAMERA_FPS} FPS")
+        """Main loop for capturing frames"""
+        print(f"[PiCamReader] Capturing at {CAMERA_RESOLUTION} @ {CAMERA_FPS} FPS")
         while self.keep_running:
             start_time = time.time()
 
-            # Capture frame
+            # Capture image frame from camera
             img = self.picam2.capture_array()
-            if self.output_size != self.picam2.preview_configuration.main.size:
-                img = cv2.resize(img, self.output_size)
-
             timestamp = time.time()
             self.frame += 1
-            self.cam_data = (img, timestamp, self.frame)
+
+            # Save frame as image file (optional)
+            if self.save_dir:
+                frame_path = os.path.join(self.save_dir, f"frame_{self.frame}.jpg")
+                cv2.imwrite(frame_path, img)
+
+            # Keep latest frame in memory for other threads
+            self.latest_frame = (img, timestamp, self.frame)
             self.is_new_data = True
 
-            # Maintain FPS timing
+            # Maintain target FPS by adjusting sleep time
             elapsed = time.time() - start_time
             time.sleep(max(0, (1.0 / CAMERA_FPS) - elapsed))
 
+        # Stop camera preview when thread ends
         self.picam2.stop_preview()
-        print("Killing PiCamReader thread")
+        print("[PiCamReader] Thread stopped")
 
     def get_data(self):
+        """Return the latest captured frame"""
         self.is_new_data = False
-        return self.cam_data
+        return self.latest_frame
 
     def stop(self):
-        print("Stopping PiCamReader thread")
+        """Stop the camera capture loop"""
         self.keep_running = False
         self._stop_event.set()
-
