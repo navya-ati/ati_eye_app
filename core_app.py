@@ -9,10 +9,9 @@ import ati_eye_utils as au
 from datetime import datetime
 import signal
 import sys
-from record_pi_cam_video import VideoRecorder  # <-- import new recorder
+from record_pi_cam_video import VideoRecorder  # SSD recorder only
 
 APP_VERSION = "0.0 - 18th April"
-
 
 @dataclass
 class YoloResult:
@@ -22,12 +21,11 @@ class YoloResult:
     input_image: np.ndarray
     detected_object: bool
 
-
 class AtiEyeApp:
     def __init__(self):
         # Load config and logger
         self.config = au.load_config()
-        self.logger, self.log_dir = au.create_logger(APP_VERSION)
+        self.logger, self.log_dir, _ = au.create_logger(APP_VERSION)  # only SSD logging
 
         # Load YOLO model
         self.model = YOLO('yolov8n.pt')
@@ -37,22 +35,25 @@ class AtiEyeApp:
         self.camera_h_fov, self.camera_v_fov = au.get_camera_fov(self.config)
         self.logger.info(f"Camera FOV - H: {self.camera_h_fov}°, V: {self.camera_v_fov}°")
 
-        # Create data collection folder on SSD
+        # Create SSD data collection folder (for storing processed frames)
         base_path = "/mnt/ssd/videos"
         os.makedirs(base_path, exist_ok=True)
         now = datetime.now()
-        self.data_folder = os.path.join(base_path, "data_collection_" + now.strftime("%Y_%m_%d_%H_%M_%S"))
+        folder_name = "data_collection_" + now.strftime("%Y_%m_%d_%H_%M_%S")
+        self.data_folder = os.path.join(base_path, folder_name)
         os.makedirs(self.data_folder, exist_ok=True)
-        print("[INFO] Videos and frames will be saved in:", self.data_folder)
 
-        # Initialize camera
-        self.cam_capture = PiCamReader(save_dir=self.data_folder)
+        print("[INFO] Videos and frames will be saved in SSD only:")
+        print("   SSD :", self.data_folder)
+
+        # Initialize camera (frames kept in RAM, SSD storage after processing)
+        self.cam_capture = PiCamReader()  # no save_dir argument
         self.cam_capture.start()
         time.sleep(1)
         self.logger.info("PiCamReader initialized")
 
-        # Initialize video recorder
-        self.recorder = VideoRecorder(self.data_folder, self.config)
+        # Initialize recorder for SSD (only)
+        self.recorder_ssd = VideoRecorder(self.data_folder, self.config)
 
         # Signal handling for clean exit
         signal.signal(signal.SIGINT, self._exit_handler)
@@ -70,7 +71,7 @@ class AtiEyeApp:
         print("\n[INFO] Exiting gracefully...")
         try:
             self.cam_capture.stop()
-            self.recorder.release()
+            self.recorder_ssd.release()
             cv2.destroyAllWindows()
         except Exception as e:
             print("[ERROR] During exit:", e)
@@ -96,12 +97,9 @@ class AtiEyeApp:
         cv2.imshow("Ati Eye Preview", preview_resized)
         cv2.waitKey(1)
 
-        # Record video with detections
-        self.recorder.write_frame(preview)
-
-        # Log image
-        frame_id = int(time.time())
-        self.log_image(YoloResult(classes, xyxy, scores, input_image, detected_object), frame_id=frame_id)
+        # Save video/frame to SSD after processing
+        self.recorder_ssd.write_frame(preview)
+        self.log_image(YoloResult(classes, xyxy, scores, input_image, detected_object))
 
         # Update inference history
         self.update_inference_history(detected_object)
@@ -109,8 +107,8 @@ class AtiEyeApp:
 
         return YoloResult(classes, xyxy, scores, input_image, detected_object)
 
-    def log_image(self, yolo_result: YoloResult, frame_id: int):
-        """Save image with/without detections"""
+    def log_image(self, yolo_result: YoloResult):
+        """Save image with/without detections to SSD only"""
         image = yolo_result.input_image.copy()
         add_name = "no_detection"
 
@@ -119,6 +117,8 @@ class AtiEyeApp:
                 cv2.rectangle(image, (xy[0], xy[1]), (xy[2], xy[3]), (0, 255, 0), 4)
                 add_name = "detected"
 
+        # Save processed frame to SSD only
+        frame_id = int(time.time())
         cv2.imwrite(os.path.join(self.data_folder, f"{frame_id}-{add_name}.jpg"), image)
 
     def update_inference_history(self, detected_object: bool):
@@ -138,6 +138,6 @@ class AtiEyeApp:
         """Destructor for cleanup"""
         if hasattr(self, "cam_capture"):
             self.cam_capture.stop()
-        if hasattr(self, "recorder"):
-            self.recorder.release()
+        if hasattr(self, "recorder_ssd"):
+            self.recorder_ssd.release()
         cv2.destroyAllWindows()
