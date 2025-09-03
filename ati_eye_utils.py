@@ -16,23 +16,8 @@ def get_time_str():
     """Return timestamp string for filenames/logging"""
     return time.strftime("%Y-%m-%d-%H-%M-%S")
 
-def setup_logger(log_file, level=logging.INFO):
-    """Create and configure logger with file handler"""
-    logger = logging.getLogger(__name__)
-    logger.setLevel(level)
-    fh = logging.FileHandler(log_file)
-    fh.setLevel(level)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
-    return logger
-
 def create_logger(app_version=""):
-    """
-    Create log directory and initialize logger.
-    Only SSD/out directory is used for logs.
-    No project directory for frames/images.
-    """
+    
     start_time_str = get_time_str()
 
     # SSD/out directory for logs
