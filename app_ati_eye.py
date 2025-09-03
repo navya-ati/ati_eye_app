@@ -7,11 +7,13 @@ print("importing the libs! This could take a minute!")
 print(f"Initializing global AtiEye application v{APP_VERSION}!")
 
 def main():
+    # Initialize AtiEye application
     eye = AtiEyeApp()
     start_time = time.time()
 
     while True:
         if eye.cam_capture.is_new_data:
+            # Get latest frame from RAM
             frame_data = eye.cam_capture.get_data()
             if frame_data is None:
                 continue
@@ -23,15 +25,12 @@ def main():
                 eye.logger.info(f"Invalid image in frame: {frame_id}! KILLING the app!")
                 break
 
-            # Run inference
+            # Run inference → this also saves video/frames to SSD after processing
             yolo_result = eye.run_inference(image_src)
 
             # Update and process inference history
             eye.update_inference_history(yolo_result.detected_object)
             eye.process_inference_history()
-
-            # Log image results
-            eye.log_image(yolo_result, frame_id)
 
             # Log processing time
             proc_time = round(time.time() - start_time, 3)
