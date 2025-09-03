@@ -14,18 +14,13 @@ CAMERA_RESOLUTION = tuple(config.get("camera_resolution", [1920, 1080]))
 CAMERA_FPS = config.get("camera_fps", 10)
 
 class PiCamReader(Thread):
-    def __init__(self, input_size=CAMERA_RESOLUTION, color_format="RGB888", save_dir=None):
-        Thread.__init__(self)  # Initialize thread
+    def __init__(self, input_size=CAMERA_RESOLUTION, color_format="RGB888"):
+        Thread.__init__(self)
         self._stop_event = Event()
-        self.frame = 0  # Frame counter
+        self.frame = 0
         self.keep_running = True
-        self.latest_frame = None  # Stores latest captured frame
-        self.is_new_data = False  # Flag to check if new data is available
-
-        # Directory to save frames (if provided)
-        self.save_dir = save_dir
-        if self.save_dir:
-            os.makedirs(self.save_dir, exist_ok=True)
+        self.latest_frame = None
+        self.is_new_data = False
 
         # Camera Field of View (FOV) from config
         self.h_fov = config.get("camera_h_fov", 62.2)
@@ -40,30 +35,25 @@ class PiCamReader(Thread):
         self.picam2.start()
 
     def run(self):
-        """Main loop for capturing frames"""
+        """Main loop for capturing frames (RAM only)"""
         print(f"[PiCamReader] Capturing at {CAMERA_RESOLUTION} @ {CAMERA_FPS} FPS")
         while self.keep_running:
             start_time = time.time()
 
-            # Capture image frame from camera
+            # Capture frame
             img = self.picam2.capture_array()
             timestamp = time.time()
             self.frame += 1
 
-            # Save frame as image file (optional)
-            if self.save_dir:
-                frame_path = os.path.join(self.save_dir, f"frame_{self.frame}.jpg")
-                cv2.imwrite(frame_path, img)
-
-            # Keep latest frame in memory for other threads
+            # Save frame only in RAM for processing later
             self.latest_frame = (img, timestamp, self.frame)
             self.is_new_data = True
 
-            # Maintain target FPS by adjusting sleep time
+            # Maintain target FPS
             elapsed = time.time() - start_time
             time.sleep(max(0, (1.0 / CAMERA_FPS) - elapsed))
 
-        # Stop camera preview when thread ends
+        # Stop camera preview
         self.picam2.stop_preview()
         print("[PiCamReader] Thread stopped")
 
