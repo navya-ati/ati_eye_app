@@ -3,10 +3,6 @@ import os
 from datetime import datetime
 
 class VideoRecorder:
-    """
-    Saves video in different resolutions.
-    Works with frames provided by PiCamReader (or any other frame source).
-    """
 
     def __init__(self, save_dir="/mnt/ssd/videos", config=None):
         self.save_dir = save_dir
@@ -17,7 +13,7 @@ class VideoRecorder:
         self.camera_fps = config.get("camera_fps", 10)
         self.video_format = config.get("video_format", "mp4")  # e.g., "mp4" or "avi"
 
-        # Generate timestamped filenames to avoid overwrites
+        # Generate timestamped filenames 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.mid_path = os.path.join(self.save_dir, f"pi_cam_mid_{ts}.{self.video_format}")
         self.low_path = os.path.join(self.save_dir, f"pi_cam_low_{ts}.{self.video_format}")
@@ -30,9 +26,6 @@ class VideoRecorder:
         self.sav_low = cv2.VideoWriter(self.low_path, fourcc, self.camera_fps, (640, 480))
 
     def write_frame(self, frame):
-        """
-        Write a frame to both mid- and low-resolution videos.
-        """
         try:
             # Full resolution
             self.sav_mid.write(frame)
@@ -44,9 +37,6 @@ class VideoRecorder:
             print("[VideoRecorder ERROR]", e)
 
     def release(self):
-        """
-        Release video files properly.
-        """
         if self.sav_mid.isOpened():
             self.sav_mid.release()
         if self.sav_low.isOpened():
