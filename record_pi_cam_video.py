@@ -1,122 +1,53 @@
 import cv2
-import time
-import json
-from picamera2 import Picamera2
-from threading import Thread, Event
 import os
-
-# Load settings from eye_config.json
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "eye_config.json")
-with open(CONFIG_PATH, "r") as f:
-    config = json.load(f)
-
-# Get resolution and FPS from config
-CAMERA_RESOLUTION = tuple(config.get("camera_resolution", [640, 480]))
-CAMERA_FPS = config.get("camera_fps", 10)
-
-
-class PiCamReader(Thread):
-    def __init__(self, input_size=CAMERA_RESOLUTION, output_size=None, color_format="RGB888", ssd_frame_path="frames"):
-        Thread.__init__(self)
-        self._stop_event = Event()
-        self.frame_id = 0
-
-        # Camera field of view (FOV)
-        self.h_fov = config.get("camera_h_fov", 62.2)
-        self.v_fov = config.get("camera_v_fov", 48.8)
-
-        # Setup PiCamera2
-        self.picam2 = Picamera2()
-        self.picam2.preview_configuration.main.size = input_size
-        self.picam2.preview_configuration.main.format = color_format
-        self.picam2.preview_configuration.align()
-        self.picam2.configure("preview")
-        self.picam2.start()
-
-        # Set output size (default = input size)
-        self.output_size = output_size if output_size else input_size
-        self.keep_running = True
-        self.is_new_data = False
-        self.cam_data = None
-
-        # SSD storage folder
-        self.ssd_frame_path = ssd_frame_path
-        os.makedirs(self.ssd_frame_path, exist_ok=True)
-
-    def run(self):
-        """Keep capturing frames in a loop"""
-        print(f"[PiCamReader] Capturing at {CAMERA_RESOLUTION} @ {CAMERA_FPS} FPS")
-        while self.keep_running:
-            start_time = time.time()
-
-            # Take one picture (frame)
-            img = self.picam2.capture_array()
-            timestamp = time.time()
-            self.frame_id += 1
-
-            # Save frame as image in SSD
-            frame_filename = os.path.join(self.ssd_frame_path, f"{self.frame_id}.jpg")
-            cv2.imwrite(frame_filename, img)
-
-            # Save frame in memory for other use
-            self.cam_data = (img, timestamp, self.frame_id)
-            self.is_new_data = True
-
-            # Sleep to maintain correct FPS
-            elapsed = time.time() - start_time
-            time.sleep(max(0, (1.0 / CAMERA_FPS) - elapsed))
-
-        self.picam2.stop_preview()
-        print("PiCamReader thread stopped")
-
-    def get_data(self):
-        """Get the latest frame"""
-        self.is_new_data = False
-        return self.cam_data
-
-    def stop(self):
-        """Stop the camera thread"""
-        print("Stopping PiCamReader thread")
-        self.keep_running = False
-        self._stop_event.set()
-
+from datetime import datetime
 
 class VideoRecorder:
-    """Saves video in different resolutions"""
-    def __init__(self, save_dir, config):
+    """
+    Saves video in different resolutions.
+    Works with frames provided by PiCamReader (or any other frame source).
+    """
+
+    def __init__(self, save_dir="/mnt/ssd/videos", config=None):
         self.save_dir = save_dir
+        os.makedirs(self.save_dir, exist_ok=True)
+
+        # Use camera resolution & FPS from config
         self.camera_resolution = tuple(config.get("camera_resolution", [1920, 1080]))
         self.camera_fps = config.get("camera_fps", 10)
+        self.video_format = config.get("video_format", "mp4")  # e.g., "mp4" or "avi"
 
-        # Writer for mid-resolution AVI
-        self.sav_mid_avi = cv2.VideoWriter(
-            os.path.join(save_dir, "pi_cam_mid.avi"),
-            cv2.VideoWriter_fourcc(*'XVID'),
-            self.camera_fps,
-            self.camera_resolution
-        )
+        # Generate timestamped filenames to avoid overwrites
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.mid_path = os.path.join(self.save_dir, f"pi_cam_mid_{ts}.{self.video_format}")
+        self.low_path = os.path.join(self.save_dir, f"pi_cam_low_{ts}.{self.video_format}")
 
-        # Writer for low-resolution AVI
-        self.sav_low_avi = cv2.VideoWriter(
-            os.path.join(save_dir, "pi_cam_low.avi"),
-            cv2.VideoWriter_fourcc(*'MJPG'),
-            self.camera_fps,
-            (640, 480)
-        )
+        # Select codec based on format
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v') if self.video_format == "mp4" else cv2.VideoWriter_fourcc(*'XVID')
+
+        # Initialize video writers
+        self.sav_mid = cv2.VideoWriter(self.mid_path, fourcc, self.camera_fps, self.camera_resolution)
+        self.sav_low = cv2.VideoWriter(self.low_path, fourcc, self.camera_fps, (640, 480))
 
     def write_frame(self, frame):
-        """Write both mid and low resolution frames"""
+        """
+        Write a frame to both mid- and low-resolution videos.
+        """
         try:
-            # Save original frame
-            self.sav_mid_avi.write(frame)
+            # Full resolution
+            self.sav_mid.write(frame)
 
-            # Save smaller (640x480) frame
+            # Low resolution
             frame_low = cv2.resize(frame, (640, 480))
-            self.sav_low_avi.write(frame_low)
+            self.sav_low.write(frame_low)
         except Exception as e:
             print("[VideoRecorder ERROR]", e)
 
     def release(self):
-        """Close video files"""
-        self.sav_mid_avi.release()
-        self.sav_low_avi.release()
+        """
+        Release video files properly.
+        """
+        if self.sav_mid.isOpened():
+            self.sav_mid.release()
+        if self.sav_low.isOpened():
+            self.sav_low.release()
