@@ -9,7 +9,7 @@ import ati_eye_utils as au
 from datetime import datetime
 import signal
 import sys
-from record_pi_cam_video import VideoRecorder  # SSD recorder only
+from record_pi_cam_video import VideoRecorder 
 
 APP_VERSION = "0.0 - 18th April"
 
@@ -35,7 +35,7 @@ class AtiEyeApp:
         self.camera_h_fov, self.camera_v_fov = au.get_camera_fov(self.config)
         self.logger.info(f"Camera FOV - H: {self.camera_h_fov}°, V: {self.camera_v_fov}°")
 
-        # Create SSD data collection folder (for storing processed frames)
+        # Create SSD data collection folder 
         base_path = "/mnt/ssd/videos"
         os.makedirs(base_path, exist_ok=True)
         now = datetime.now()
@@ -46,13 +46,13 @@ class AtiEyeApp:
         print("[INFO] Videos and frames will be saved in SSD only:")
         print("   SSD :", self.data_folder)
 
-        # Initialize RAM-only camera
-        self.cam_capture = PiCamReader()  # no save_dir argument
+        # Initialize camera
+        self.cam_capture = PiCamReader()  
         self.cam_capture.start()
         time.sleep(1)
         self.logger.info("PiCamReader initialized")
 
-        # Initialize recorder for SSD (only)
+        # Initialize recorder 
         self.recorder_ssd = VideoRecorder(self.data_folder, self.config)
 
         # Signal handling for clean exit
