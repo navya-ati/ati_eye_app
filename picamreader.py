@@ -14,18 +14,13 @@ CAMERA_RESOLUTION = tuple(config.get("camera_resolution", [1920, 1080]))
 CAMERA_FPS = config.get("camera_fps", 10)
 
 class PiCamReader(Thread):
-    def __init__(self, input_size=CAMERA_RESOLUTION, color_format="RGB888", save_dir=None):
+    def __init__(self, input_size=CAMERA_RESOLUTION, color_format="RGB888"):
         Thread.__init__(self)
         self._stop_event = Event()
         self.frame = 0
         self.keep_running = True
         self.latest_frame = None
         self.is_new_data = False
-
-        # Directory to save frames (SSD)
-        self.save_dir = save_dir
-        if self.save_dir:
-            os.makedirs(self.save_dir, exist_ok=True)
 
         # Camera Field of View (FOV) from config
         self.h_fov = config.get("camera_h_fov", 62.2)
@@ -50,12 +45,7 @@ class PiCamReader(Thread):
             timestamp = time.time()
             self.frame += 1
 
-            # Save frame as image file in SSD path
-            if self.save_dir:
-                frame_path = os.path.join(self.save_dir, f"frame_{self.frame}.jpg")
-                cv2.imwrite(frame_path, img)
-
-            # Keep latest frame in memory
+            # Store latest frame in RAM only
             self.latest_frame = (img, timestamp, self.frame)
             self.is_new_data = True
 
