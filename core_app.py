@@ -47,7 +47,7 @@ class AtiEyeApp:
         print("   SSD :", self.data_folder)
 
         # Initialize camera (frames kept in RAM, SSD storage after processing)
-        self.cam_capture = PiCamReader()  # no save_dir argument
+        self.cam_capture = PiCamReader(config=self.config)  # pass config to refactored PiCamReader
         self.cam_capture.start()
         time.sleep(1)
         self.logger.info("PiCamReader initialized")
